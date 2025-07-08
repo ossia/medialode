@@ -1,8 +1,0 @@
-/home/zep/medialode/build/CMakeFiles/edit_cache.dir
-/home/zep/medialode/build/CMakeFiles/rebuild_cache.dir
-/home/zep/medialode/build/lib/CMakeFiles/medialode-lib.dir
-/home/zep/medialode/build/lib/CMakeFiles/edit_cache.dir
-/home/zep/medialode/build/lib/CMakeFiles/rebuild_cache.dir
-/home/zep/medialode/build/app/CMakeFiles/medialode-app.dir
-/home/zep/medialode/build/app/CMakeFiles/edit_cache.dir
-/home/zep/medialode/build/app/CMakeFiles/rebuild_cache.dir

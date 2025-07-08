@@ -1,1 +1,0 @@
-/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/medialode-app.dir/link.d "CMakeFiles/medialode-app.dir/main.cpp.o" -o ../bin/medialode-app  ../lib/libmedialode-lib.a

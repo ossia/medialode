@@ -1,2 +1,0 @@
-/usr/bin/ar qc libmedialode-lib.a "CMakeFiles/medialode-lib.dir/scanlib.cpp.o"
-/usr/bin/ranlib libmedialode-lib.a
