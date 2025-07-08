@@ -14,8 +14,3 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 # Add subdirectories
 add_subdirectory(lib)
 add_subdirectory(app)
-
-# Optional: Add examples and tests
-# add_subdirectory(examples/hello-world)
-# add_subdirectory(tests)
-
