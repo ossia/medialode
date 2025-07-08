@@ -19,7 +19,7 @@ jobs:
         uses: jwlawson/actions-setup-cmake@v1
 
       - name: Configure
-        run: cmake -S . -B build
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --config Release

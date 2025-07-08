@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.10)
 project(medialode LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -14,8 +14,3 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 # Add subdirectories
 add_subdirectory(lib)
 add_subdirectory(app)
-
-# Optional: Add examples and tests
-# add_subdirectory(examples/hello-world)
-# add_subdirectory(tests)
-
