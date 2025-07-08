@@ -1,0 +1,9 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/zep/medialode/build/cmake_install.cmake",
+		"/home/zep/medialode/build/lib/cmake_install.cmake",
+		"/home/zep/medialode/build/app/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
