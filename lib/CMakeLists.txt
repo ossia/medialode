@@ -20,7 +20,7 @@ FetchContent_MakeAvailable(quickcpplib)
 FetchContent_Declare(
   llfio
   GIT_REPOSITORY https://github.com/ned14/llfio.git
-  GIT_TAG        06ea607de0346a1d77a807fd37efc2fdfb005de5
+  GIT_TAG        af19b0da98b5b8c834a40a421a35b5a581e3e312
 )
 FetchContent_MakeAvailable(llfio)
 
@@ -40,4 +40,3 @@ target_include_directories(medialode-lib
 target_link_libraries(medialode-lib
     PUBLIC llfio_sl
 )
-
