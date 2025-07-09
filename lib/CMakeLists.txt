@@ -20,7 +20,7 @@ FetchContent_MakeAvailable(quickcpplib)
 FetchContent_Declare(
   llfio
   GIT_REPOSITORY https://github.com/ned14/llfio.git
-  GIT_TAG        af19b0da98b5b8c834a40a421a35b5a581e3e312
+  GIT_TAG        develop
 )
 FetchContent_MakeAvailable(llfio)
 
