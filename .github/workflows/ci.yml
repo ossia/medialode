@@ -18,6 +18,23 @@ jobs:
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v1
 
+      - name: Install Boost (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-system-dev libboost-thread-dev
+
+      - name: Install Boost (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install boost
+
+      - name: Install Boost (Windows)
+        if: runner.os == 'Windows'
+        uses: egor-tensin/setup-boost@v1
+        with:
+          boost_version: 1.83.0
+
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
@@ -27,4 +44,3 @@ jobs:
       - name: Run App
         run: ./build/bin/medialode-app
         if: runner.os != 'Windows'
-
