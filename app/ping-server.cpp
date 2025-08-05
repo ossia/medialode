@@ -18,57 +18,93 @@ public:
     : ws_(std::move(socket)) {}
 
   void start() {
-    ws_.async_accept([self = shared_from_this()](beast::error_code ec) {
-      if (!ec) self->do_read();
+    std::cout << "[Session] Starting new WebSocket session\n";
+    auto self = shared_from_this();
+    ws_.async_accept([self](beast::error_code ec) {
+      if (!ec) {
+        std::cout << "[Session] Connection accepted\n";
+        self->do_read();
+      } else {
+        std::cerr << "[Session] Accept error: " << ec.message() << "\n";
+      }
     });
   }
 
   void do_read() {
-    ws_.async_read(buffer_, [self = shared_from_this()](beast::error_code ec, std::size_t) {
-      if (ec) return;
+    auto self = shared_from_this();
+    ws_.async_read(buffer_, [self](beast::error_code ec, std::size_t bytes_transferred) {
+      if (ec) {
+        if (ec == websocket::error::closed) {
+          std::cout << "[Session] Connection closed by client\n";
+        } else {
+          std::cerr << "[Session] Read error: " << ec.message() << "\n";
+        }
+        return;
+      }
 
       try {
-        auto msg_text = beast::buffers_to_string(self->buffer_.data());
+        std::string msg_text = beast::buffers_to_string(self->buffer_.data());
+        self->buffer_.consume(self->buffer_.size()); // ✅ consume immediately
+
+        std::cout << "[Session] Received message: " << msg_text << "\n";
+
+        // Parse JSON and handle IPC
         auto j = nlohmann::json::parse(msg_text);
         auto envelope = j.get<medialode::ipc::MessageEnvelope>();
         auto var = medialode::ipc::parse_variant(envelope);
 
-        // Handle PingRequest
         if (std::holds_alternative<medialode::ipc::PingRequest>(var)) {
+          std::cout << "[Session] Handling PingRequest -> Sending PingResponse\n";
           medialode::ipc::PingResponse resp;
           auto reply = medialode::ipc::make_envelope(resp);
           nlohmann::json jresp = reply;
+
           self->ws_.async_write(
-            asio::buffer(jresp.dump()), [](beast::error_code, std::size_t) {});
+            asio::buffer(jresp.dump()),
+            [self](beast::error_code ec, std::size_t) {
+              if (ec) {
+                std::cerr << "[Session] Write error: " << ec.message() << "\n";
+              } else {
+                std::cout << "[Session] Response sent successfully\n";
+              }
+            }
+          );
         }
       } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << '\n';
+        std::cerr << "[Session] Exception: " << e.what() << '\n';
       }
 
-      self->buffer_.consume(self->buffer_.size());
-      self->do_read(); // continue reading
+      self->do_read(); // Keep reading messages
     });
   }
 };
 
 void run_server(asio::io_context& ioc, uint16_t port = 37587) {
-  tcp::acceptor acceptor{ioc, {tcp::v4(), port}};
-  std::cout << "Server running on ws://localhost:" << port << "\n";
+  auto acceptor = std::make_shared<tcp::acceptor>(ioc, tcp::endpoint(tcp::v4(), port));
+  std::cout << "[Server] Running on ws://localhost:" << port << "\n";
 
-  std::function<void()> do_accept;
-  do_accept = [&]() {
-    acceptor.async_accept([&](beast::error_code ec, tcp::socket socket) {
-      if (!ec)
+  auto do_accept = std::make_shared<std::function<void()>>();
+  *do_accept = [acceptor, do_accept]() {
+    acceptor->async_accept([acceptor, do_accept](beast::error_code ec, tcp::socket socket) {
+      if (!ec) {
+        std::cout << "[Server] New connection accepted\n";
         std::make_shared<WebSocketSession>(std::move(socket))->start();
-      do_accept();
+      } else {
+        std::cerr << "[Server] Accept error: " << ec.message() << "\n";
+      }
+      (*do_accept)(); // Continue accepting new clients
     });
   };
 
-  do_accept();
+  (*do_accept)();
 }
 
 int main() {
-  boost::asio::io_context ctx;
-  run_server(ctx, 37587);
-  ctx.run();
+  try {
+    boost::asio::io_context ctx;
+    run_server(ctx, 37587);
+    ctx.run();
+  } catch (const std::exception& e) {
+    std::cerr << "[Fatal] Exception in main: " << e.what() << "\n";
+  }
 }

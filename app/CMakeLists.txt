@@ -23,15 +23,8 @@ target_link_libraries(ping-client
           nlohmann_json::nlohmann_json
 )
 
-target_compile_definitions(ping-client PRIVATE ASIO_STANDALONE=0)
+target_compile_definitions(ping-client PRIVATE
+                           ASIO_STANDALONE=0
+                           _WEBSOCKETPP_CPP11_INTERNAL_
 
-# Add OSSIA header-only include path
-target_include_directories(ping-client
-  PRIVATE
-    ${ossia_SOURCE_DIR}/src
-    ${websocketpp_SOURCE_DIR}
-    ${nano_signal_slot_SOURCE_DIR}
 )
-
-
-
