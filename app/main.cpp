@@ -1,8 +1,7 @@
-#include <iostream>
+#include <medialode/file_watcher.hpp>
 
 int main()
 {
-    std::cout << "Welcome to Medialode!\n";
+    test_llfio();
     return 0;
 }
-

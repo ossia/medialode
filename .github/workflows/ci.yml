@@ -13,18 +13,47 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v1
 
-      - name: Configure
-        run: cmake -S . -B build
+      # ---------------- Linux ----------------
+      - name: Install Boost (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libboost-system-dev libboost-thread-dev
 
+      # ---------------- macOS ----------------
+      - name: Install Boost (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install boost cmake
+
+      # ---------------- Windows ----------------
+      - name: Install Boost (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install boost-msvc-14.3 -y
+          echo "BOOST_ROOT=C:/local/boost_1_83_0" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # Configure
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      # Build
       - name: Build
         run: cmake --build build --config Release
 
+      # Run app (Linux & macOS only)
       - name: Run App
-        run: ./build/bin/medialode-app
         if: runner.os != 'Windows'
+        run: ./build/app/medialode-app
+
+      # Run app (Windows only)
+      - name: Run App (Windows)
+        if: runner.os == 'Windows'
+        run: ./build/app/Release/medialode-app.exe
 

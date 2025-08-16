@@ -1,21 +1,22 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.16)
 project(medialode LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Set output directories for all targets
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+include(FetchContent)
 
-# Include folders for headers
-include_directories(${CMAKE_SOURCE_DIR}/include)
+# nlohmann_json
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(nlohmann_json)
 
-# Add subdirectories
+# Boost
+find_package(Boost REQUIRED COMPONENTS system)
+
+# Add subdirectories last
 add_subdirectory(lib)
 add_subdirectory(app)
-
-# Optional: Add examples and tests
-# add_subdirectory(examples/hello-world)
-# add_subdirectory(tests)
-
