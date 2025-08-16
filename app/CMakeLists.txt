@@ -23,6 +23,15 @@ target_link_libraries(ping-client
           nlohmann_json::nlohmann_json
 )
 
+# libmgr-server (Boost.Beast WebSocket server skeleton)
+add_executable(libmgr-server libmgr-server.cpp)
+target_link_libraries(libmgr-server
+  PRIVATE
+    medialode-lib
+    Boost::system
+    nlohmann_json::nlohmann_json
+)
+
 target_compile_definitions(ping-client PRIVATE
                            ASIO_STANDALONE=0
                            _WEBSOCKETPP_CPP11_INTERNAL_
