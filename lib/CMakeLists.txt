@@ -16,14 +16,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(quickcpplib)
 
-# LLFIO
-FetchContent_Declare(
-  llfio
-  GIT_REPOSITORY https://github.com/ned14/llfio.git
-  GIT_TAG        develop
-)
-FetchContent_MakeAvailable(llfio)
-
 add_library(medialode-lib
     scanlib.cpp
     file_watcher.cpp
@@ -32,11 +24,9 @@ add_library(medialode-lib
 target_include_directories(medialode-lib
     PUBLIC
         ${CMAKE_SOURCE_DIR}/include
-        ${llfio_SOURCE_DIR}/include
         ${outcome_SOURCE_DIR}/include
         ${quickcpplib_SOURCE_DIR}/include
 )
 
 target_link_libraries(medialode-lib
-    PUBLIC llfio_sl
 )

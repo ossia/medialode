@@ -1,122 +1,123 @@
 # IPC Protocol Specification
 
-## Overview
+This document describes the JSON-over-WebSocket messages exchanged between:
 
-The media library uses **JSON-over-WebSocket** for communication between clients and the server.
-All messages are sent as JSON objects with the following structure:
+- **libmgr-server** (central database + orchestrator)
+- **libmgr-scan-worker** (scanner processes)
+- **CLI clients** (e.g. `scan-folders-cli`)
 
-`{  "type":  "<MessageType>",  "data":  { ... }  }`
+All messages are JSON objects with a required `"type"` field.
 
--   **type**: String identifying the message type.
+---
 
--   **data**: Object containing message-specific payload.
+## Ping
 
+- **PingRequest**
 
-----------
+```json
+{ "type": "PingRequest" }
+```
 
-## Message Types
+- **PingResponse**
+```json
+{ "type": "PingResponse", "message": "pong" }
+```
 
-### 1. **PingRequest**
+## Worker Identity
 
-**Purpose:** Check if the server is alive.
+- **WorkerHello**
 
-**Direction:** Client → Server
+Sent by workers on connect.
 
-**Example:**
+```json
+{
+  "type": "WorkerHello",
+  "role": "scan-worker",
+  "token": "changeme",
+  "name": "worker-1"
+}
+```
 
-`{  "type":  "PingRequest",  "data":  {  "message":  "ping"  }  }`
+## Fields:
 
-----------
+- role — currently "scan-worker".
 
-### 2. **PingResponse**
+- token — must match server’s LIBMGR_WORKER_TOKEN.
 
-**Purpose:** Response to `PingRequest`.
+- name — worker identifier (for logs).
 
-**Direction:** Server → Client
+## ClientHello
 
-**Example:**
+Sent optionally by CLI clients.
 
-`{  "type":  "PingResponse",  "data":  {  "message":  "pong"  }  }`
+```json
+{
+  "type": "ClientHello",
+  "token": ""
+}
+```
 
-----------
+## Folder Scan
 
-### 3. **ScanFoldersRequest**
+- **ScanFoldersRequest**
 
-**Purpose:** Request the server to scan specific folders for media files.
+Sent by clients.
 
-**Direction:** Client → Server
+```json
+{
+  "type": "ScanFoldersRequest",
+  "paths": ["/tmp", "/home/user/Music"]
+}
+```
 
-**Fields:**
+- **ScanFoldersResponse**
 
--   `folders`: Array of strings (absolute paths to scan).
+Reply from server after inserting into DB.
 
+```json
+{
+  "type": "ScanFoldersResponse",
+  "scanned_folders": 123,
+  "scanned_files": 4567
+}
+```
 
-**Example:**
+## File Scan
 
-`{  "type":  "ScanFoldersRequest",  "data":  {  "folders":  [  "/home/user/Music",  "/home/user/Videos"  ]  }  }`
+- **ScanFileRequest**
 
-----------
+Sent by server → worker.
 
-### 4. **ScanFoldersResponse**
+```json
+{
+  "type": "ScanFileRequest",
+  "request_id": "abcd123",
+  "path": "/tmp/example.wav"
+}
+```
+- **FileScanned**
 
-**Purpose:** Acknowledgement that the scan has started.
+Reply from worker.
 
-**Direction:** Server → Client
+```json
+{
+  "type": "FileScanned",
+  "request_id": "abcd123",
+  "path": "/tmp/example.wav",
+  "size": 102400,
+  "mtime": 1717776000
+}
+```
 
-**Fields:**
+- **FileError**
 
--   `status`: String, one of:
+Reply from worker on error.
 
-    -   `"ok"` (accepted)
-
-    -   `"error"` (invalid request)
-
-
-**Example:**
-
-`{  "type":  "ScanFoldersResponse",  "data":  {  "status":  "ok"  }  }`
-
-----------
-
-### 5. **ScanProgressEvent**
-
-**Purpose:** Notify the client about scan progress.
-
-**Direction:** Server → Client
-
-**Fields:**
-
--   `folder`: String (the folder currently being scanned).
-
--   `progress`: Integer (percentage, 0–100).
-
-
-**Example:**
-
-`{  "type":  "ScanProgressEvent",  "data":  {  "folder":  "/home/user/Music",  "progress":  42  }  }`
-
-----------
-
-## Connection Lifecycle
-
-1.  **Client connects** to `ws://<host>:<port>`.
-
-2.  **Server sends a greeting** (optional, currently skipped).
-
-3.  Client sends **PingRequest** or **ScanFoldersRequest**.
-
-4.  Server responds with corresponding message (`PingResponse`, `ScanFoldersResponse`) or emits **progress events**.
-
-5.  **Either party can close the connection** at any time.
-
-----------
-
-## Error Handling
-
--   If a request is invalid, the server replies with:
-
-`{  "type":  "ErrorResponse",  "data":  {  "code":  "<ErrorCode>",  "message":  "<Error description>"  }  }`
-
-Example:
-
-`{  "type":  "ErrorResponse",  "data":  {  "code":  "INVALID_PAYLOAD",  "message":  "Missing 'folders' field in ScanFoldersRequest"  }  }`
+```json
+{
+  "type": "FileError",
+  "request_id": "abcd123",
+  "path": "/tmp/missing.txt",
+  "error": "file not found"
+}
+```

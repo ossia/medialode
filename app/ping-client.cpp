@@ -1,46 +1,64 @@
-#include <boost/beast/core.hpp>
-#include <boost/beast/websocket.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <nlohmann/json.hpp>
 #include <iostream>
-#include "ipc/protocol.hpp"
+#include <string>
+#include <nlohmann/json.hpp>
+#include "../lib/ipc/protocol.hpp"
+#include <websocketpp/config/asio_no_tls_client.hpp>
+#include <websocketpp/client.hpp>
 
-namespace beast = boost::beast;
-namespace websocket = beast::websocket;
-namespace net = boost::asio;
-using tcp = net::ip::tcp;
+using json = nlohmann::json;
+typedef websocketpp::client<websocketpp::config::asio_client> client;
 
 int main() {
-    try {
-        net::io_context ioc;
-        tcp::resolver resolver(ioc);
-        websocket::stream<tcp::socket> ws(ioc);
+    client c;
+    std::string uri = "ws://localhost:8081";
 
-        auto const results = resolver.resolve("127.0.0.1", "37587");
-        net::connect(ws.next_layer(), results.begin(), results.end());
+    c.init_asio();
 
-        ws.handshake("127.0.0.1:37587", "/");
+    c.set_message_handler([&](websocketpp::connection_hdl, client::message_ptr msg) {
+        try {
+            auto parsed = parseMessage(msg->get_payload());
 
-        // Send PingRequest
-        medialode::ipc::PingRequest ping;
-        auto env = medialode::ipc::make_envelope(ping);
-        ws.write(net::buffer(nlohmann::json(env).dump()));
-
-        // Read PongResponse
-        beast::flat_buffer buffer;
-        ws.read(buffer);
-        auto msg = beast::buffers_to_string(buffer.data());
-
-        auto envelope = nlohmann::json::parse(msg).get<medialode::ipc::MessageEnvelope>();
-        auto var = medialode::ipc::parse_variant(envelope);
-        if (auto* pong = std::get_if<medialode::ipc::PingResponse>(&var)) {
-            std::cout << "Received pong: " << pong->message << "\n";
+            std::visit([&](auto&& m) {
+                using T = std::decay_t<decltype(m)>;
+                if constexpr (std::is_same_v<T, PingResponse>) {
+                    std::cout << "[Server]: PingResponse: " << m.message << "\n";
+                } else if constexpr (std::is_same_v<T, ScanFoldersResponse>) {
+                    std::cout << "[Server]: ScanFoldersResponse: status=" << m.status
+                              << " scanned_count=" << m.scanned_count << "\n";
+                } else {
+                    std::cout << "[Server]: Unknown response type\n";
+                }
+            }, parsed);
+        } catch (const std::exception& e) {
+            std::cerr << "Error parsing response: " << e.what() << "\n";
         }
+    });
 
-        ws.close(websocket::close_code::normal);
+    websocketpp::lib::error_code ec;
+    auto con = c.get_connection(uri, ec);
+    if (ec) {
+        std::cerr << "Connection error: " << ec.message() << "\n";
+        return 1;
     }
-    catch (std::exception const& e) {
-        std::cerr << "Error: " << e.what() << "\n";
-    }
+
+    c.connect(con);
+    std::thread t([&] { c.run(); });
+
+    // Send a PingRequest
+    PingRequest ping;
+    json j_ping = ping;
+    c.send(con->get_handle(), j_ping.dump(), websocketpp::frame::opcode::text);
+
+    std::cout << "Sent PingRequest.\n";
+
+    // Send a ScanFoldersRequest
+    ScanFoldersRequest scan;
+    scan.paths = {"/home/user/Music", "/mnt/external/Movies"};
+    json j_scan = scan;
+    c.send(con->get_handle(), j_scan.dump(), websocketpp::frame::opcode::text);
+
+    std::cout << "Sent ScanFoldersRequest.\n";
+
+    t.join();
 }
 
