@@ -30,6 +30,7 @@ jobs:
         run: |
           brew update
           brew install boost sqlite
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix boost)" >> $GITHUB_ENV
 
       # ---------------- Windows ----------------
       - name: Install Boost (Windows)
