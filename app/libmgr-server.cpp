@@ -1,4 +1,3 @@
-// app/libmgr-server.cpp
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
 #include <iostream>
@@ -28,7 +27,7 @@ namespace fs = std::filesystem;
 
 static constexpr const char* DEFAULT_DB = "medialode.db";
 
-// ---------- Config ----------
+// Config
 static std::string env_str(const char* k, std::string def=""){
   if(const char* v = std::getenv(k)) return v;
   return def;
@@ -38,7 +37,7 @@ static const std::size_t MAX_WRITE_QUEUE = 1024;
 static const std::size_t MAX_MESSAGE_SIZE = 2 * 1024 * 1024;
 static const std::vector<fs::path> ALLOWED_ROOTS = { fs::path("/") };
 
-// ---------- Logger ----------
+// Logger
 static void logj(const std::string& level, const std::string& msg,
                  std::optional<std::string> req_id = std::nullopt){
   nlohmann::json j{{"level",level},{"msg",msg}};
@@ -46,7 +45,7 @@ static void logj(const std::string& level, const std::string& msg,
   std::cout << j.dump() << std::endl;
 }
 
-// ---------- SQLite ----------
+// SQLite
 struct DbHandle {
   sqlite3* db = nullptr;
   ~DbHandle(){ if(db) sqlite3_close(db); }
@@ -120,7 +119,7 @@ static void upsert_file(sqlite3* db, const std::string& path,
   sqlite3_finalize(stmt);
 }
 
-// ---------- Dedicated DB executor ----------
+// Dedicated DB executor
 class DBExecutor {
 public:
   explicit DBExecutor(std::unique_ptr<DbHandle> dbh)
@@ -160,7 +159,7 @@ private:
   std::thread t_;
 };
 
-// ---------- Shared state ----------
+// Shared state
 struct WebSocketSession;
 struct ServerState {
   std::mutex m;
@@ -190,7 +189,7 @@ struct ServerState {
   }
 };
 
-// ---------- Session ----------
+// Session
 class WebSocketSession : public std::enable_shared_from_this<WebSocketSession> {
   websocket::stream<tcp::socket> ws_;
   beast::flat_buffer buf_;
@@ -351,7 +350,7 @@ public:
   }
 };
 
-// ---------- run_server ----------
+// run_server
 void run_server(asio::io_context& ioc,std::uint16_t port,const std::string& dbfile){
   static ServerState state;
   static DBExecutor dbx(open_db(dbfile));

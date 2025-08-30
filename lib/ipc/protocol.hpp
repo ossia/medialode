@@ -9,7 +9,7 @@ namespace medialode::ipc {
 
 using json = nlohmann::json;
 
-// -------- Existing --------
+// Existing
 struct PingRequest { std::string type = "PingRequest"; };
 struct PingResponse { std::string type = "PingResponse"; std::string message; };
 
@@ -20,7 +20,7 @@ struct ScanFoldersResponse {
   std::size_t scanned_files   = 0;
 };
 
-// -------- Worker/client identity & file scan --------
+// Worker/client identity & file scan
 struct WorkerHello {
   std::string type = "WorkerHello";
   std::string role = "scan-worker"; // default role
@@ -62,7 +62,7 @@ using IPCMessage = std::variant<
   ScanFileRequest, FileScanned, FileError
 >;
 
-// --- JSON ---
+// JSON
 
 // WorkerHello (merged definition)
 inline void to_json(nlohmann::json& j, const WorkerHello& m) {
