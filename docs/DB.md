@@ -31,6 +31,14 @@ All discovered files.
 - `mtime INTEGER`
 - `kind TEXT` (`image`, `audio`, `video`, `script`)
 
+**Notes on `kind`:**
+- Normally set by **workers** (e.g. `"image"`, `"audio"`, `"video"`, `"script"`).
+- If missing, the server **infers** the type from metadata fields:
+  - `width/height/channels` → image
+  - `duration/sample_rate` → audio
+  - `duration/codec/width` → video
+  - `language/syntax_ok` → script
+
 ### `image_metadata`
 - `path TEXT PRIMARY KEY`
 - `width, height, channels`
@@ -56,9 +64,22 @@ All discovered files.
 
 ---
 
+## Workers
+
+- Each worker specializes in one type of file:
+  `image-worker`, `audio-worker`, `video-worker`, `script-worker`.
+- Workers connect to the server via WebSocket and handle `ScanFileRequest`.
+- Workers extract metadata and return it as JSON.
+- This separation keeps the server simple and allows workers to crash/restart independently.
+
+---
+
 ## Workflow
 
 1. **ScanFoldersRequest** populates `files` and `folders`.
-2. **ScanFileRequest** → workers → metadata tables.
-3. CLI queries DB via **ListFilesRequest**.
+2. **ScanFileRequest** is delegated to the appropriate worker (image, audio, video, script).
+   - The server always upserts into the `files` table first.
+   - Based on `kind`, it then upserts into the relevant metadata table (`*_metadata`).
+   - Finally, `files.kind` is updated.
+3. CLI or API queries the DB via **ListFilesRequest** and similar messages.
 
