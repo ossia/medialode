@@ -21,5 +21,7 @@ find_package(Boost REQUIRED COMPONENTS system)
 add_subdirectory(lib)
 add_subdirectory(app)
 add_subdirectory(lib/workers/image)
+add_subdirectory(lib/workers/audio)
 add_subdirectory(app/libmgr-image-worker)
+add_subdirectory(app/libmgr-audio-worker)
 
