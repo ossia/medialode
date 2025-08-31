@@ -4,6 +4,7 @@
 #include <boost/beast/core/buffers_to_string.hpp>
 #include <iostream>
 #include <string>
+#include <chrono>
 #include <nlohmann/json.hpp>
 #include "ipc/protocol.hpp"
 
@@ -17,7 +18,6 @@ int main(int argc, char* argv[]) {
   std::string port = "8081";
   std::string path;
 
-  // Arg parsing
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     if (a == "--host" && i + 1 < argc) host = argv[++i];
@@ -29,7 +29,6 @@ int main(int argc, char* argv[]) {
       path = a;
     }
   }
-
   if (path.empty()) {
     std::cerr << "Usage: scan-file-cli [--host HOST] [--port PORT] <file>\n";
     return 1;
@@ -37,7 +36,6 @@ int main(int argc, char* argv[]) {
 
   try {
     asio::io_context ioc;
-
     tcp::resolver resolver{ioc};
     auto const results = resolver.resolve(host, port);
 
@@ -45,22 +43,33 @@ int main(int argc, char* argv[]) {
     asio::connect(ws.next_layer(), results);
     ws.handshake(host, "/");
 
-    // Send ClientHello
+    // ClientHello
     medialode::ipc::ClientHello hello;
     hello.token = "";
     ws.write(asio::buffer(nlohmann::json(hello).dump()));
 
-    // Build ScanFileRequest
+    // Build ScanFileRequest with unique id
     medialode::ipc::ScanFileRequest req;
-    req.request_id = "req1";
+    req.request_id = std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count());
     req.path = path;
     ws.write(asio::buffer(nlohmann::json(req).dump()));
 
-    // Wait for response
     beast::flat_buffer buffer;
-    ws.read(buffer);
-    std::string response = beast::buffers_to_string(buffer.data());
-    std::cout << response << "\n";
+    while (true) {
+      buffer.consume(buffer.size());
+      ws.read(buffer);
+      std::string response = beast::buffers_to_string(buffer.data());
+      auto j = nlohmann::json::parse(response);
+      std::string type = j.at("type").get<std::string>();
+
+      if (type == "FileScanned" || type == "FileError") {
+        std::cout << response << "\n";
+        break;
+      } else {
+        std::cerr << "Got unrelated msg: " << response << "\n";
+      }
+    }
 
     ws.close(websocket::close_code::normal);
     return 0;

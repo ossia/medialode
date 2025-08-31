@@ -35,7 +35,6 @@ static std::string env_str(const char* k, std::string def=""){
 static const std::string WORKER_TOKEN = env_str("LIBMGR_WORKER_TOKEN", "changeme");
 static const std::size_t MAX_WRITE_QUEUE = 1024;
 static const std::size_t MAX_MESSAGE_SIZE = 2 * 1024 * 1024;
-static const std::vector<fs::path> ALLOWED_ROOTS = { fs::path("/") };
 
 // Logger
 static void logj(const std::string& level, const std::string& msg,
@@ -45,7 +44,7 @@ static void logj(const std::string& level, const std::string& msg,
   std::cout << j.dump() << std::endl;
 }
 
-// SQLite
+// SQLite handle
 struct DbHandle {
   sqlite3* db = nullptr;
   ~DbHandle(){ if(db) sqlite3_close(db); }
@@ -84,13 +83,55 @@ static std::unique_ptr<DbHandle> open_db(const std::string& path){
   exec_retry(h->db, "PRAGMA synchronous = NORMAL;");
   exec_retry(h->db, "PRAGMA foreign_keys = ON;");
 
-  exec_retry(h->db, "CREATE TABLE IF NOT EXISTS folders (path TEXT PRIMARY KEY, last_scan INTEGER);");
-  exec_retry(h->db, "CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, folder_path TEXT, mtime INTEGER);");
+  exec_retry(h->db,
+    "CREATE TABLE IF NOT EXISTS folders ("
+    " path TEXT PRIMARY KEY,"
+    " last_scan INTEGER);");
+
+  exec_retry(h->db,
+    "CREATE TABLE IF NOT EXISTS files ("
+    " path TEXT PRIMARY KEY,"
+    " folder_path TEXT,"
+    " mtime INTEGER,"
+    " kind TEXT DEFAULT ''"
+    ");");
   exec_retry(h->db, "CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder_path);");
+
+  exec_retry(h->db,
+    "CREATE TABLE IF NOT EXISTS image_metadata ("
+    " path TEXT PRIMARY KEY,"
+    " width INTEGER,"
+    " height INTEGER,"
+    " channels INTEGER,"
+    " FOREIGN KEY(path) REFERENCES files(path) ON DELETE CASCADE"
+    ");");
+
+  exec_retry(h->db,
+    "CREATE TABLE IF NOT EXISTS audio_metadata ("
+    " path TEXT PRIMARY KEY,"
+    " duration REAL,"
+    " sample_rate INTEGER,"
+    " channels INTEGER,"
+    " bitrate INTEGER,"
+    " format TEXT,"
+    " FOREIGN KEY(path) REFERENCES files(path) ON DELETE CASCADE"
+    ");");
+
+  exec_retry(h->db,
+    "CREATE TABLE IF NOT EXISTS video_metadata ("
+    " path TEXT PRIMARY KEY,"
+    " duration REAL,"
+    " width INTEGER,"
+    " height INTEGER,"
+    " codec TEXT,"
+    " framerate REAL,"
+    " FOREIGN KEY(path) REFERENCES files(path) ON DELETE CASCADE"
+    ");");
 
   return h;
 }
 
+// Upsert helpers
 static void upsert_folder(sqlite3* db, const std::string& path, std::int64_t last_scan){
   sqlite3_stmt* stmt=nullptr;
   const char* sql="INSERT INTO folders(path,last_scan) VALUES(?,?) "
@@ -105,21 +146,107 @@ static void upsert_folder(sqlite3* db, const std::string& path, std::int64_t las
 }
 
 static void upsert_file(sqlite3* db, const std::string& path,
-                        const std::string& folder, std::int64_t mtime){
+                        const std::string& folder, std::int64_t mtime,
+                        const std::string& kind=""){
   sqlite3_stmt* stmt=nullptr;
-  const char* sql="INSERT INTO files(path,folder_path,mtime) VALUES(?,?,?) "
-                  "ON CONFLICT(path) DO UPDATE SET folder_path=excluded.folder_path, mtime=excluded.mtime;";
+  const char* sql="INSERT INTO files(path,folder_path,mtime,kind) VALUES(?,?,?,?) "
+                  "ON CONFLICT(path) DO UPDATE SET "
+                  " folder_path=excluded.folder_path,"
+                  " mtime=excluded.mtime,"
+                  " kind=excluded.kind;";
   if(sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
     throw std::runtime_error(sqlite3_errmsg(db));
   sqlite3_bind_text(stmt,1,path.c_str(),-1,SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt,2,folder.c_str(),-1,SQLITE_TRANSIENT);
   sqlite3_bind_int64(stmt,3,mtime);
+  sqlite3_bind_text(stmt,4,kind.c_str(),-1,SQLITE_TRANSIENT);
   if(sqlite3_step(stmt) != SQLITE_DONE)
     throw std::runtime_error(sqlite3_errmsg(db));
   sqlite3_finalize(stmt);
 }
 
-// Dedicated DB executor
+static void upsert_image_metadata(sqlite3* db,
+                                  const std::string& path,
+                                  int width, int height, int channels){
+  sqlite3_stmt* stmt=nullptr;
+  const char* sql =
+    "INSERT INTO image_metadata(path,width,height,channels) VALUES(?,?,?,?) "
+    "ON CONFLICT(path) DO UPDATE SET "
+    " width=excluded.width,"
+    " height=excluded.height,"
+    " channels=excluded.channels;";
+  if(sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    throw std::runtime_error(sqlite3_errmsg(db));
+  sqlite3_bind_text(stmt,1,path.c_str(),-1,SQLITE_TRANSIENT);
+  sqlite3_bind_int(stmt,2,width);
+  sqlite3_bind_int(stmt,3,height);
+  sqlite3_bind_int(stmt,4,channels);
+  if(sqlite3_step(stmt) != SQLITE_DONE)
+    throw std::runtime_error(sqlite3_errmsg(db));
+  sqlite3_finalize(stmt);
+}
+
+static void upsert_audio_metadata(sqlite3* db,
+                                  const std::string& path,
+                                  double duration,
+                                  int sample_rate,
+                                  int channels,
+                                  int bitrate,
+                                  const std::string& format){
+  sqlite3_stmt* stmt=nullptr;
+  const char* sql =
+    "INSERT INTO audio_metadata(path,duration,sample_rate,channels,bitrate,format)"
+    " VALUES(?,?,?,?,?,?) "
+    "ON CONFLICT(path) DO UPDATE SET "
+    " duration=excluded.duration,"
+    " sample_rate=excluded.sample_rate,"
+    " channels=excluded.channels,"
+    " bitrate=excluded.bitrate,"
+    " format=excluded.format;";
+  if(sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    throw std::runtime_error(sqlite3_errmsg(db));
+  sqlite3_bind_text(stmt,1,path.c_str(),-1,SQLITE_TRANSIENT);
+  sqlite3_bind_double(stmt,2,duration);
+  sqlite3_bind_int(stmt,3,sample_rate);
+  sqlite3_bind_int(stmt,4,channels);
+  sqlite3_bind_int(stmt,5,bitrate);
+  sqlite3_bind_text(stmt,6,format.c_str(),-1,SQLITE_TRANSIENT);
+  if(sqlite3_step(stmt) != SQLITE_DONE)
+    throw std::runtime_error(sqlite3_errmsg(db));
+  sqlite3_finalize(stmt);
+}
+
+static void upsert_video_metadata(sqlite3* db,
+                                  const std::string& path,
+                                  double duration,
+                                  int width,
+                                  int height,
+                                  const std::string& codec,
+                                  double framerate){
+  sqlite3_stmt* stmt=nullptr;
+  const char* sql =
+    "INSERT INTO video_metadata(path,duration,width,height,codec,framerate)"
+    " VALUES(?,?,?,?,?,?) "
+    "ON CONFLICT(path) DO UPDATE SET "
+    " duration=excluded.duration,"
+    " width=excluded.width,"
+    " height=excluded.height,"
+    " codec=excluded.codec,"
+    " framerate=excluded.framerate;";
+  if(sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    throw std::runtime_error(sqlite3_errmsg(db));
+  sqlite3_bind_text(stmt,1,path.c_str(),-1,SQLITE_TRANSIENT);
+  sqlite3_bind_double(stmt,2,duration);
+  sqlite3_bind_int(stmt,3,width);
+  sqlite3_bind_int(stmt,4,height);
+  sqlite3_bind_text(stmt,5,codec.c_str(),-1,SQLITE_TRANSIENT);
+  sqlite3_bind_double(stmt,6,framerate);
+  if(sqlite3_step(stmt) != SQLITE_DONE)
+    throw std::runtime_error(sqlite3_errmsg(db));
+  sqlite3_finalize(stmt);
+}
+
+// DBExecutor
 class DBExecutor {
 public:
   explicit DBExecutor(std::unique_ptr<DbHandle> dbh)
@@ -159,7 +286,7 @@ private:
   std::thread t_;
 };
 
-// Shared state
+// ServerState
 struct WebSocketSession;
 struct ServerState {
   std::mutex m;
@@ -189,7 +316,7 @@ struct ServerState {
   }
 };
 
-// Session
+// WebSocketSession
 class WebSocketSession : public std::enable_shared_from_this<WebSocketSession> {
   websocket::stream<tcp::socket> ws_;
   beast::flat_buffer buf_;
@@ -322,8 +449,70 @@ public:
           }
         }
       }
-      else if((type=="FileScanned"||type=="FileError") && role_==Role::Worker){
+      else if(type=="FileError" && role_==Role::Worker){
         std::string reqid=j.at("request_id").get<std::string>();
+        if(auto client=state_.take_client(reqid)){
+          client->enqueue(j.dump());
+        }
+      }
+      else if(type=="FileScanned" && role_==Role::Worker){
+        std::string reqid=j.at("request_id").get<std::string>();
+        std::string path=j.at("path").get<std::string>();
+
+        logj("debug","processing FileScanned for "+path);
+
+        auto fut=dbx_.exec([j,path](sqlite3* db){
+          exec_retry(db,"BEGIN;");
+          try{
+            std::string kind="";
+            std::int64_t mtime=j.value("mtime",0);
+            std::string folder=fs::path(path).parent_path().string();
+
+            // 1. Insert/Update base file row FIRST
+            upsert_file(db,path,folder,mtime,"");
+
+            // 2. Then insert metadata + update kind
+            if(j.contains("width") && j.contains("height") && j.contains("channels")){
+              kind="image";
+              logj("debug","upserting image metadata for "+path);
+              upsert_image_metadata(db,path,
+                j.at("width").get<int>(),
+                j.at("height").get<int>(),
+                j.at("channels").get<int>());
+            }
+            else if(j.contains("duration") && j.contains("sample_rate")){
+              kind="audio";
+              logj("debug","upserting audio metadata for "+path);
+              upsert_audio_metadata(db,path,
+                j.at("duration").get<double>(),
+                j.at("sample_rate").get<int>(),
+                j.value("channels",0),
+                j.value("bitrate",0),
+                j.value("format",std::string("")));
+            }
+            else if(j.contains("duration") && j.contains("width") && j.contains("codec")){
+              kind="video";
+              logj("debug","upserting video metadata for "+path);
+              upsert_video_metadata(db,path,
+                j.at("duration").get<double>(),
+                j.at("width").get<int>(),
+                j.at("height").get<int>(),
+                j.value("codec",std::string("")),
+                j.value("framerate",0.0));
+            }
+
+            // Update file with proper kind
+            upsert_file(db,path,folder,mtime,kind);
+
+            exec_retry(db,"COMMIT;");
+          }catch(const std::exception&e){
+            exec_retry(db,"ROLLBACK;");
+            logj("error",std::string("DB error: ")+e.what());
+            throw;
+          }
+        });
+        fut.wait();
+
         if(auto client=state_.take_client(reqid)){
           client->enqueue(j.dump());
         }
@@ -379,6 +568,7 @@ void run_server(asio::io_context& ioc,std::uint16_t port,const std::string& dbfi
   });
 }
 
+// main
 int main(int argc,char*argv[]){
   try{
     std::string dbfile=DEFAULT_DB;

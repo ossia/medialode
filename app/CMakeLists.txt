@@ -7,7 +7,6 @@ add_executable(scan-folders-cli scan-folders-cli.cpp)
 target_include_directories(scan-folders-cli PRIVATE ${CMAKE_SOURCE_DIR}/lib)
 target_link_libraries(scan-folders-cli
   PRIVATE
-    medialode-lib
     Boost::system
     Boost::thread
     nlohmann_json::nlohmann_json
@@ -18,7 +17,6 @@ add_executable(libmgr-server libmgr-server.cpp)
 target_include_directories(libmgr-server PRIVATE ${CMAKE_SOURCE_DIR}/lib)
 target_link_libraries(libmgr-server
   PRIVATE
-    medialode-lib
     Boost::system
     Boost::thread
     SQLite::SQLite3
@@ -30,7 +28,6 @@ add_executable(libmgr-scan-worker libmgr-scan-worker.cpp)
 target_include_directories(libmgr-scan-worker PRIVATE ${CMAKE_SOURCE_DIR}/lib)
 target_link_libraries(libmgr-scan-worker
   PRIVATE
-    medialode-lib
     Boost::system
     Boost::thread
     nlohmann_json::nlohmann_json

@@ -20,3 +20,6 @@ find_package(Boost REQUIRED COMPONENTS system)
 # Add subdirectories last
 add_subdirectory(lib)
 add_subdirectory(app)
+add_subdirectory(lib/workers/image)
+add_subdirectory(app/libmgr-image-worker)
+
