@@ -7,3 +7,14 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 
+# Ignore local DBs
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+medialode.db
+medialode.db-*
+
+# Ignore server logs
+*.log
