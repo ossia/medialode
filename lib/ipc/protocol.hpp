@@ -54,12 +54,35 @@ struct FileError {
   std::string error;
 };
 
+// CLI
+struct ListTypesRequest {
+  std::string type = "ListTypesRequest";
+};
+
+struct ListTypesResponse {
+  std::string type = "ListTypesResponse";
+  std::vector<std::string> types;
+};
+
+struct ListFilesRequest {
+  std::string type = "ListFilesRequest";
+  std::string folder;
+  std::string kind; // "audio", "video", "image", "script", or empty for all
+};
+
+struct ListFilesResponse {
+  std::string type = "ListFilesResponse";
+  std::vector<std::string> files;
+};
+
+
 // Union
 using IPCMessage = std::variant<
   PingRequest, PingResponse,
   ScanFoldersRequest, ScanFoldersResponse,
   WorkerHello, ClientHello,
-  ScanFileRequest, FileScanned, FileError
+  ScanFileRequest, FileScanned, FileError,
+  ListTypesRequest, ListTypesResponse
 >;
 
 // JSON
@@ -124,6 +147,34 @@ inline void from_json(const json& j, FileError& m){
   m.error      = j.at("error").get<std::string>();
 }
 
+// CLI
+inline void to_json(json& j, const ListTypesRequest& m){
+  j = {{"type", m.type}};
+}
+inline void from_json(const json&, ListTypesRequest&){}
+
+inline void to_json(json& j, const ListTypesResponse& m){
+  j = {{"type", m.type},{"types", m.types}};
+}
+inline void from_json(const json& j, ListTypesResponse& m){
+  m.types = j.at("types").get<std::vector<std::string>>();
+}
+
+inline void to_json(json& j, const ListFilesRequest& m) {
+  j = {{"type", m.type}, {"folder", m.folder}, {"kind", m.kind}};
+}
+inline void from_json(const json& j, ListFilesRequest& m) {
+  m.folder = j.value("folder", "");
+  m.kind   = j.value("kind", "");
+}
+
+inline void to_json(json& j, const ListFilesResponse& m) {
+  j = {{"type", m.type}, {"files", m.files}};
+}
+inline void from_json(const json& j, ListFilesResponse& m) {
+  m.files = j.at("files").get<std::vector<std::string>>();
+}
+
 // Parse helper
 inline IPCMessage parseMessage(const std::string& text){
   auto j = json::parse(text);
@@ -137,6 +188,8 @@ inline IPCMessage parseMessage(const std::string& text){
   if(t=="ScanFileRequest") return j.get<ScanFileRequest>();
   if(t=="FileScanned") return j.get<FileScanned>();
   if(t=="FileError") return j.get<FileError>();
+  if(t=="ListTypesRequest") return j.get<ListTypesRequest>();
+  if(t=="ListTypesResponse") return j.get<ListTypesResponse>();
   throw std::runtime_error("Unknown message type: " + t);
 }
 
@@ -145,3 +198,4 @@ inline std::string to_text(const IPCMessage& msg){
 }
 
 } // namespace medialode::ipc
+

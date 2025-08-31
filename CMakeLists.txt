@@ -28,3 +28,5 @@ add_subdirectory(app/libmgr-image-worker)
 add_subdirectory(app/libmgr-audio-worker)
 add_subdirectory(app/libmgr-video-worker)
 add_subdirectory(app/libmgr-script-worker)
+add_subdirectory(app/libmgr-cli)
+

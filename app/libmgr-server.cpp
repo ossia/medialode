@@ -469,6 +469,50 @@ public:
           } catch (const std::exception& e) { logj("error", "scan-folders:" + std::string(e.what())); }
         }).detach();
       }
+      else if (type == "ListTypesRequest") {
+        medialode::ipc::ListTypesResponse resp;
+        resp.types = {"image","audio","video","script"};
+        enqueue(nlohmann::json(resp).dump());
+        logj("debug", "handled ListTypesRequest");
+      }
+      else if (type == "ListFilesRequest") {
+        auto req = j.get<medialode::ipc::ListFilesRequest>();
+        logj("debug", "received ListFilesRequest");
+        auto self = shared_from_this();
+        std::thread([self, req]() {
+          try {
+            auto fut = self->dbx_.exec([req](sqlite3* db) {
+              std::vector<std::string> paths;
+              sqlite3_stmt* stmt = nullptr;
+              std::string sql = "SELECT path FROM files WHERE 1=1";
+              if (!req.kind.empty()) {
+                sql += " AND kind=?";
+              }
+              if (!req.folder.empty()) {
+                sql += " AND folder_path=?";
+              }
+              if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+                throw std::runtime_error(sqlite3_errmsg(db));
+              int idx = 1;
+              if (!req.kind.empty()) sqlite3_bind_text(stmt, idx++, req.kind.c_str(), -1, SQLITE_TRANSIENT);
+              if (!req.folder.empty()) sqlite3_bind_text(stmt, idx++, req.folder.c_str(), -1, SQLITE_TRANSIENT);
+              while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const unsigned char* txt = sqlite3_column_text(stmt, 0);
+                if (txt) paths.emplace_back(reinterpret_cast<const char*>(txt));
+              }
+              sqlite3_finalize(stmt);
+              return paths;
+            });
+            auto paths = fut.get();
+            medialode::ipc::ListFilesResponse resp;
+            resp.files = paths;
+            self->enqueue(nlohmann::json(resp).dump());
+            logj("debug", "handled ListFilesRequest with " + std::to_string(paths.size()) + " files");
+          } catch (const std::exception& e) {
+            logj("error", std::string("list-files:") + e.what());
+          }
+        }).detach();
+      }
       else if (type == "ScanFileRequest" && role_ == Role::Client) {
         auto req = j.get<medialode::ipc::ScanFileRequest>();
         logj("debug", "received ScanFileRequest for " + req.path);
@@ -505,16 +549,13 @@ public:
         auto fut = dbx_.exec([j, path](sqlite3* db) {
           exec_retry(db, "BEGIN;");
           try {
-            // trust "kind" if worker provided it
             std::string kind = j.value("kind", "");
             std::int64_t mtime = j.value("mtime", 0);
             std::string folder = fs::path(path).parent_path().string();
 
-            // Always upsert base file first
             upsert_file(db, path, folder, mtime, "");
 
             if (kind.empty()) {
-              // fallback to heuristics
               if (j.contains("width") && j.contains("height") && j.contains("channels"))
                 kind = "image";
               else if (j.contains("duration") && j.contains("sample_rate"))

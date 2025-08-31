@@ -100,6 +100,7 @@ int main(int argc, char* argv[]){
               jmsg["width"]    = meta["width"];
               jmsg["height"]   = meta["height"];
               jmsg["channels"] = meta["channels"];
+              jmsg["kind"] = "image";
 
               ws.write(asio::buffer(jmsg.dump()));
               std::cout << "[ImageWorker] Sent FileScanned with image metadata\n";

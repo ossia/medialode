@@ -91,6 +91,7 @@ int main(int argc, char* argv[]){
                   ok.mtime = to_epoch_seconds(fs::last_write_time(p));
 
                   nlohmann::json jmsg = ok;
+                  jmsg["kind"] = "audio";
                   jmsg.update(meta);
 
                   ws.write(asio::buffer(jmsg.dump()));
