@@ -22,6 +22,7 @@ add_subdirectory(lib)
 add_subdirectory(app)
 add_subdirectory(lib/workers/image)
 add_subdirectory(lib/workers/audio)
+add_subdirectory(lib/workers/video)
 add_subdirectory(app/libmgr-image-worker)
 add_subdirectory(app/libmgr-audio-worker)
-
+add_subdirectory(app/libmgr-video-worker)
