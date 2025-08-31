@@ -1,16 +1,26 @@
 # IPC Protocol Specification
 
-This document describes the JSON-over-WebSocket messages exchanged between:
+This document describes the **JSON-over-WebSocket** messages exchanged between:
 
 - **libmgr-server** (central database + orchestrator)
-- **libmgr-scan-worker** (scanner processes)
-- **CLI clients** (e.g. `scan-folders-cli`)
+- **libmgr-workers** (scanner processes: image, audio, video, script)
+- **CLI clients** (e.g. `libmgr-cli`, `scan-file-cli`)
 
 All messages are JSON objects with a required `"type"` field.
 
 ---
 
+## Why WebSocket + JSON?
+
+- **WebSocket** provides a persistent, bidirectional channel between server, workers, and clients.
+- **JSON** keeps the protocol human-readable and easy to debug.
+- The system is designed so workers can crash/restart independently without blocking the server.
+
+---
+
 ## Ping
+
+- **Purpose**: Keepalive between server, client, and worker.
 
 - **PingRequest**
 
@@ -19,15 +29,17 @@ All messages are JSON objects with a required `"type"` field.
 ```
 
 - **PingResponse**
+
 ```json
 { "type": "PingResponse", "message": "pong" }
 ```
 
 ## Worker Identity
 
-- **WorkerHello**
+### WorkerHello
 
-Sent by workers on connect.
+- Sent by workers on connect.
+- Identifies the worker and authenticates with the server.
 
 ```json
 {
@@ -38,17 +50,20 @@ Sent by workers on connect.
 }
 ```
 
-## Fields:
+### Fields:
 
-- role — currently "scan-worker".
+- role — always "scan-worker".
 
 - token — must match server’s LIBMGR_WORKER_TOKEN.
 
-- name — worker identifier (for logs).
+- name — worker identifier (for logs, debugging).
 
-## ClientHello
+## Client Identity
 
-Sent optionally by CLI clients.
+### ClientHello
+
+- Sent by CLI or other clients.
+- Currently only carries an optional token.
 
 ```json
 {
@@ -59,9 +74,11 @@ Sent optionally by CLI clients.
 
 ## Folder Scan
 
-- **ScanFoldersRequest**
+- Purpose: Populate folders and files tables with recursive scan.
 
-Sent by clients.
+- When used: CLI or API asks server to discover new files.
+
+- ScanFoldersRequest
 
 ```json
 {
@@ -70,9 +87,7 @@ Sent by clients.
 }
 ```
 
-- **ScanFoldersResponse**
-
-Reply from server after inserting into DB.
+- ScanFoldersResponse
 
 ```json
 {
@@ -84,9 +99,11 @@ Reply from server after inserting into DB.
 
 ## File Scan
 
-- **ScanFileRequest**
+- Purpose: Ask a worker to extract metadata for a single file.
 
-Sent by server → worker.
+- When used: Server → worker after ScanFileRequest.
+
+- ScanFileRequest
 
 ```json
 {
@@ -95,9 +112,8 @@ Sent by server → worker.
   "path": "/tmp/example.wav"
 }
 ```
-- **FileScanned**
 
-Reply from worker.
+- FileScanned
 
 ```json
 {
@@ -109,9 +125,19 @@ Reply from worker.
 }
 ```
 
-- **FileError**
+Worker-specific metadata fields (examples):
 
-Reply from worker on error.
+- Image: width, height, channels
+
+- Audio: duration, sample_rate, channels, bitrate, format
+
+- Video: duration, width, height, codec, framerate
+
+- Script: language, syntax_ok, error_message
+
+- FileError
+
+If worker cannot process file:
 
 ```json
 {
@@ -121,3 +147,74 @@ Reply from worker on error.
   "error": "file not found"
 }
 ```
+
+## Type Discovery
+
+- Purpose: Tell clients which kinds of files the system knows about.
+
+- When used: CLI list types.
+
+- ListTypesRequest
+
+```json
+{ "type": "ListTypesRequest" }
+```
+
+- ListTypesResponse
+
+```json
+{
+  "type": "ListTypesResponse",
+  "types": ["image", "audio", "video", "script"]
+}
+```
+
+## File Listing
+
+- Purpose: Query the server DB for known files.
+
+- When used: CLI list files --type <kind> --folder <path>.
+
+- ListFilesRequest
+
+```json
+{
+  "type": "ListFilesRequest",
+  "kind": "audio",
+  "folder": "/home/user/Music"
+}
+```
+
+### Fields:
+
+- kind (optional) — filter by type (image/audio/video/script).
+
+- folder (optional) — restrict to a specific folder path.
+
+- ListFilesResponse
+
+```json
+{
+  "type": "ListFilesResponse",
+  "files": [
+    "/home/user/Music/track1.mp3",
+    "/home/user/Music/track2.wav"
+  ]
+}
+```
+
+## Summary of Workflow
+
+1. Client connects → sends `ClientHello`.
+
+2. Workers connect → send `WorkerHello` with token.
+
+3. Client requests folder scan → `ScanFoldersRequest`.
+
+4. Server populates DB and delegates individual files to workers with `ScanFileRequest`.
+
+5. Workers analyze files → return `FileScanned` (or `FileError`).
+
+6. Client queries known types → `ListTypesRequest`.
+
+7. Client queries known files → `ListFilesRequest`.
